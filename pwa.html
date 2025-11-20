@@ -127,6 +127,20 @@
             </div>
         </div>
 
+
+        <!-- VIEW: MOVIE SEARCH -->
+        <div id="view-movie" class="absolute inset-0 flex flex-col items-center justify-center bg-white page-transition opacity-0 pointer-events-none translate-x-full p-6">
+            <form id="movie-form" class="w-full max-w-md flex flex-col gap-4 items-center">
+                <input type="text" id="movie-input" placeholder="Enter a movie title..." required
+                    class="w-full bg-gray-100 border-0 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none text-gray-800 placeholder-gray-400">
+                <button type="submit" class="bg-indigo-600 text-white px-6 py-2 rounded-xl font-medium hover:bg-indigo-700 transition">
+                    Search Movie
+                </button>
+            </form>
+            <div id="movie-result" class="w-full max-w-md mt-8 hidden flex-col items-center bg-gray-50 rounded-xl shadow p-6 text-center">
+                <!-- Movie details will be injected here -->
+            </div>
+        </div>
     </main>
 
     <!-- Bottom Navigation -->
@@ -139,6 +153,10 @@
             <button class="nav-btn flex flex-col items-center justify-center w-full h-full text-gray-400 hover:text-gray-600" data-target="view-tasks">
                 <i data-lucide="check-square" class="w-6 h-6 mb-1"></i>
                 <span class="text-[10px] font-medium">Tasks</span>
+            </button>
+            <button class="nav-btn flex flex-col items-center justify-center w-full h-full text-gray-400 hover:text-gray-600" data-target="view-movie">
+                <i data-lucide="film" class="w-6 h-6 mb-1"></i>
+                <span class="text-[10px] font-medium">Movie</span>
             </button>
         </div>
     </nav>
@@ -326,8 +344,12 @@
             navBtns: document.querySelectorAll('.nav-btn'),
             views: {
                 'view-timer': document.getElementById('view-timer'),
-                'view-tasks': document.getElementById('view-tasks')
+                'view-tasks': document.getElementById('view-tasks'),
+                'view-movie': document.getElementById('view-movie')
             },
+            movieForm: document.getElementById('movie-form'),
+            movieInput: document.getElementById('movie-input'),
+            movieResult: document.getElementById('movie-result'),
             toast: document.getElementById('toast'),
             offlineIndicator: document.getElementById('offline-indicator')
         };
@@ -524,8 +546,8 @@
             showToast("Task added");
         });
 
-        // --- NAVIGATION LOGIC ---
 
+        // --- NAVIGATION LOGIC ---
         els.navBtns.forEach(btn => {
             btn.addEventListener('click', () => {
                 // Update UI
@@ -545,11 +567,64 @@
                     } else {
                         el.classList.add('opacity-0', 'pointer-events-none');
                         el.classList.remove('translate-x-0', 'z-10');
-                        // Slide direction logic could go here, simplified for now
-                        el.classList.add(id === 'view-timer' ? '-translate-x-full' : 'translate-x-full'); 
+                        el.classList.add(id === 'view-timer' ? '-translate-x-full' : 'translate-x-full');
                     }
                 });
+                lucide.createIcons();
             });
+        });
+
+        // --- MOVIE SEARCH LOGIC ---
+        // Mock movie database
+        const mockMovies = {
+            'inception': {
+                title: 'Inception',
+                year: 2010,
+                director: 'Christopher Nolan',
+                plot: 'A thief who steals corporate secrets through dream-sharing technology is given the inverse task of planting an idea.',
+                thumbnail: 'https://m.media-amazon.com/images/I/51v5ZpFyaFL._AC_SY679_.jpg'
+            },
+            'interstellar': {
+                title: 'Interstellar',
+                year: 2014,
+                director: 'Christopher Nolan',
+                plot: 'A team of explorers travel through a wormhole in space in an attempt to ensure humanity’s survival.',
+                thumbnail: 'https://m.media-amazon.com/images/I/91kFYg4fX3L._AC_SY679_.jpg'
+            },
+            'matrix': {
+                title: 'The Matrix',
+                year: 1999,
+                director: 'The Wachowskis',
+                plot: 'A computer hacker learns about the true nature of his reality and his role in the war against its controllers.',
+                thumbnail: 'https://m.media-amazon.com/images/I/51EG732BV3L.jpg'
+            }
+        };
+
+        function getMockMovieDetails(title) {
+            const key = title.trim().toLowerCase();
+            return mockMovies[key] || {
+                title: title,
+                year: 2025,
+                director: 'Unknown',
+                plot: 'No details found. This is a made-up movie.',
+                thumbnail: 'https://cdn-icons-png.flaticon.com/512/744/744922.png'
+            };
+        }
+
+        els.movieForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const title = els.movieInput.value.trim();
+            if (!title) return;
+            // Simulate fetch (mock)
+            const details = getMockMovieDetails(title);
+            els.movieResult.innerHTML = `
+                <img src="${details.thumbnail}" alt="${details.title}" class="w-32 h-48 object-cover rounded-lg mx-auto mb-4 shadow">
+                <h2 class="text-xl font-bold mb-2">${details.title} <span class="text-gray-400 text-base">(${details.year})</span></h2>
+                <p class="text-sm text-gray-600 mb-1"><strong>Director:</strong> ${details.director}</p>
+                <p class="text-sm text-gray-700 mb-3">${details.plot}</p>
+            `;
+            els.movieResult.classList.remove('hidden');
+            lucide.createIcons();
         });
 
         // Event Listeners for Controls
