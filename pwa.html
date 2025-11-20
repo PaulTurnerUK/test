@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>FocusFlow PWA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Theme Color for PWA -->
+    <meta name="theme-color" content="#4f46e5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <style>
+        /* PWA-specific resets */
+        body {
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            user-select: none;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        
+        /* Custom Scrollbar for tasks */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* Smooth transitions */
+        .page-transition {
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        
+        .active-nav {
+            color: #4f46e5;
+        }
+        
+        /* Timer Progress Ring */
+        .progress-ring__circle {
+            transition: stroke-dashoffset 1s linear;
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+
+        /* Offline Indicator */
+        #offline-indicator {
+            transform: translateY(-100%);
+            transition: transform 0.3s ease;
+        }
+        #offline-indicator.visible {
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 h-screen flex flex-col overflow-hidden">
+
+    <!-- Offline Indicator -->
+    <div id="offline-indicator" class="bg-gray-800 text-white text-xs font-medium text-center py-2 absolute top-0 w-full z-50 shadow-md">
+        You are offline. Changes will sync when connection is restored.
+    </div>
+
+    <!-- Top Bar -->
+    <header class="bg-white shadow-sm px-4 py-3 flex justify-between items-center z-10 shrink-0">
+        <div class="flex items-center gap-2">
+            <i data-lucide="zap" class="w-6 h-6 text-indigo-600 fill-current"></i>
+            <h1 class="font-bold text-lg tracking-tight text-gray-900">FocusFlow</h1>
+        </div>
+        <button id="installBtn" class="hidden bg-indigo-600 text-white text-xs px-3 py-1.5 rounded-full font-medium hover:bg-indigo-700 transition">
+            Install App
+        </button>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 relative overflow-hidden">
+        
+        <!-- VIEW: TIMER -->
+        <div id="view-timer" class="absolute inset-0 flex flex-col items-center justify-center p-6 bg-white page-transition">
+            
+            <!-- Timer Ring Container -->
+            <div class="relative w-64 h-64 mb-8">
+                <svg class="w-full h-full" viewBox="0 0 100 100">
+                    <circle class="text-gray-200 stroke-current" stroke-width="4" fill="transparent" r="45" cx="50" cy="50" />
+                    <circle id="progress-ring" class="text-indigo-600 progress-ring__circle stroke-current" stroke-width="4" stroke-linecap="round" fill="transparent" r="45" cx="50" cy="50" />
+                </svg>
+                <div class="absolute inset-0 flex flex-col items-center justify-center">
+                    <span id="timer-display" class="text-5xl font-mono font-bold text-gray-800">25:00</span>
+                    <span id="timer-status" class="text-sm text-gray-500 font-medium mt-2 uppercase tracking-widest">Focus</span>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="flex gap-4 items-center">
+                <button id="reset-btn" class="p-4 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition active:scale-95">
+                    <i data-lucide="rotate-ccw" class="w-6 h-6"></i>
+                </button>
+                <button id="toggle-btn" class="p-6 rounded-full bg-indigo-600 text-white shadow-lg hover:bg-indigo-700 hover:shadow-xl transition active:scale-95">
+                    <i id="play-icon" data-lucide="play" class="w-8 h-8 fill-current"></i>
+                    <i id="pause-icon" data-lucide="pause" class="w-8 h-8 fill-current hidden"></i>
+                </button>
+                <button id="mode-btn" class="p-4 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition active:scale-95">
+                    <i data-lucide="coffee" class="w-6 h-6"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- VIEW: TASKS -->
+        <div id="view-tasks" class="absolute inset-0 flex flex-col bg-gray-50 page-transition opacity-0 pointer-events-none translate-x-full">
+            <div class="p-4 bg-white border-b border-gray-100">
+                <form id="task-form" class="flex gap-2">
+                    <input type="text" id="task-input" placeholder="What needs doing?" 
+                        class="flex-1 bg-gray-100 border-0 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none text-gray-800 placeholder-gray-400">
+                    <button type="submit" class="bg-indigo-600 text-white p-3 rounded-xl hover:bg-indigo-700 transition">
+                        <i data-lucide="plus" class="w-6 h-6"></i>
+                    </button>
+                </form>
+            </div>
+            
+            <div id="task-list" class="flex-1 overflow-y-auto p-4 space-y-3 hide-scrollbar pb-24">
+                <!-- Tasks injected here -->
+                <div class="text-center text-gray-400 mt-10">
+                    <i data-lucide="clipboard-list" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                    <p>No tasks yet. Add one above!</p>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="bg-white border-t border-gray-200 pb-safe">
+        <div class="flex justify-around items-center h-16">
+            <button class="nav-btn flex flex-col items-center justify-center w-full h-full text-indigo-600" data-target="view-timer">
+                <i data-lucide="timer" class="w-6 h-6 mb-1"></i>
+                <span class="text-[10px] font-medium">Timer</span>
+            </button>
+            <button class="nav-btn flex flex-col items-center justify-center w-full h-full text-gray-400 hover:text-gray-600" data-target="view-tasks">
+                <i data-lucide="check-square" class="w-6 h-6 mb-1"></i>
+                <span class="text-[10px] font-medium">Tasks</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-full text-sm shadow-lg opacity-0 transition-opacity duration-300 pointer-events-none z-50">
+        Action Completed
+    </div>
+
+    <script>
+        // --- PWA BOOTSTRAPPER ---
+        // Since we are in a single file, we generate the manifest and SW dynamically.
+
+        // 1. Dynamic Manifest
+        const manifest = {
+            "name": "FocusFlow",
+            "short_name": "FocusFlow",
+            "start_url": "file:///C:/Users/pturner/Downloads/pwa.html",
+            "display": "standalone",
+            "background_color": "#ffffff",
+            "theme_color": "#4f46e5",
+            "orientation": "portrait-primary",
+            "icons": [
+                {
+                    "src": "https://cdn-icons-png.flaticon.com/512/3686/3686924.png",
+                    "sizes": "192x192",
+                    "type": "image/png"
+                },
+                {
+                    "src": "https://cdn-icons-png.flaticon.com/512/3686/3686924.png",
+                    "sizes": "512x512",
+                    "type": "image/png"
+                }
+            ]
+        };
+        const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/manifest+json'});
+        const manifestURL = URL.createObjectURL(manifestBlob);
+        const link = document.createElement('link');
+        link.rel = 'manifest';
+        link.href = manifestURL;
+        document.head.appendChild(link);
+
+        // 2. Dynamic Service Worker with Background Sync
+        if ('serviceWorker' in navigator) {
+            const swCode = `
+                const CACHE_NAME = 'focus-flow-v3';
+                const urlsToCache = [
+                    './',
+                    'https://cdn.tailwindcss.com',
+                    'https://unpkg.com/lucide@latest'
+                ];
+
+                self.addEventListener('install', event => {
+                    event.waitUntil(
+                        caches.open(CACHE_NAME)
+                            .then(cache => cache.addAll(urlsToCache))
+                    );
+                    self.skipWaiting();
+                });
+
+                self.addEventListener('activate', event => {
+                    event.waitUntil(
+                        caches.keys().then(cacheNames => {
+                            return Promise.all(
+                                cacheNames.map(cacheName => {
+                                    if (cacheName !== CACHE_NAME) {
+                                        return caches.delete(cacheName);
+                                    }
+                                })
+                            );
+                        }).then(() => clients.claim())
+                    );
+                });
+
+                self.addEventListener('fetch', event => {
+                    event.respondWith(
+                        caches.match(event.request)
+                            .then(response => {
+                                if (response) return response;
+                                return fetch(event.request).then(
+                                    function(response) {
+                                        // Check if we received a valid response
+                                        // IMPORTANT: We must allow 'cors' type for CDNs (Tailwind/Lucide)
+                                        if(!response || response.status !== 200 || (response.type !== 'basic' && response.type !== 'cors')) {
+                                            return response;
+                                        }
+
+                                        // Clone the response
+                                        var responseToCache = response.clone();
+
+                                        caches.open(CACHE_NAME)
+                                            .then(function(cache) {
+                                                // Only cache http/https schemes to avoid errors with chrome-extension:// etc.
+                                                if (event.request.url.startsWith('http')) {
+                                                    cache.put(event.request, responseToCache);
+                                                }
+                                            });
+
+                                        return response;
+                                    }
+                                );
+                            })
+                    );
+                });
+
+                // Background Sync Listener
+                self.addEventListener('sync', event => {
+                    if (event.tag === 'sync-tasks') {
+                        console.log('[SW] Background Sync Triggered');
+                        event.waitUntil(
+                            new Promise(resolve => setTimeout(resolve, 500))
+                        );
+                    }
+                });
+            `;
+            
+            // Create Blob and URL
+            const swBlob = new Blob([swCode], {type: 'application/javascript'});
+            const swUrl = URL.createObjectURL(swBlob);
+
+            // Register with specific error handling
+            navigator.serviceWorker.register(swUrl)
+                .then(reg => {
+                    console.log('Service Worker registered successfully:', reg);
+                    // Attempt to register sync immediately if supported
+                    if ('sync' in reg) {
+                         reg.sync.register('sync-tasks').catch(err => console.log('Sync registration failed (expected in non-installed PWA):', err));
+                    }
+                })
+                .catch(err => {
+                    console.warn('Service Worker registration failed:', err);
+                    console.info('Note: Service Workers often fail in preview environments, private tabs, or non-HTTPS contexts. The app will still function online.');
+                });
+        }
+
+        // 3. Install Prompt Logic
+        let deferredPrompt;
+        const installBtn = document.getElementById('installBtn');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            installBtn.classList.remove('hidden');
+        });
+
+        installBtn.addEventListener('click', async () => {
+            if (!deferredPrompt) return;
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            deferredPrompt = null;
+            installBtn.classList.add('hidden');
+        });
+
+
+        // --- APP LOGIC ---
+
+        // Initialize Icons
+        lucide.createIcons();
+
+        // State
+        const state = {
+            timer: {
+                timeLeft: 25 * 60,
+                duration: 25 * 60,
+                isActive: false,
+                isFocus: true, // true = focus, false = break
+                interval: null
+            },
+            tasks: JSON.parse(localStorage.getItem('focusflow-tasks')) || []
+        };
+
+        // Elements
+        const els = {
+            display: document.getElementById('timer-display'),
+            status: document.getElementById('timer-status'),
+            ring: document.getElementById('progress-ring'),
+            playIcon: document.getElementById('play-icon'),
+            pauseIcon: document.getElementById('pause-icon'),
+            toggleBtn: document.getElementById('toggle-btn'),
+            resetBtn: document.getElementById('reset-btn'),
+            modeBtn: document.getElementById('mode-btn'),
+            taskList: document.getElementById('task-list'),
+            taskForm: document.getElementById('task-form'),
+            taskInput: document.getElementById('task-input'),
+            navBtns: document.querySelectorAll('.nav-btn'),
+            views: {
+                'view-timer': document.getElementById('view-timer'),
+                'view-tasks': document.getElementById('view-tasks')
+            },
+            toast: document.getElementById('toast'),
+            offlineIndicator: document.getElementById('offline-indicator')
+        };
+
+        // Helpers
+        const formatTime = (seconds) => {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        };
+
+        const showToast = (msg) => {
+            els.toast.textContent = msg;
+            els.toast.style.opacity = '1';
+            setTimeout(() => els.toast.style.opacity = '0', 2000);
+        };
+
+        // --- SYNC & CONNECTIVITY LOGIC ---
+
+        // 1. Network Status Monitoring
+        const updateOnlineStatus = () => {
+            if (navigator.onLine) {
+                els.offlineIndicator.classList.remove('visible');
+                // Trigger sync on reconnection
+                requestBackgroundSync();
+            } else {
+                els.offlineIndicator.classList.add('visible');
+            }
+        };
+
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+        // Initial check
+        if (!navigator.onLine) updateOnlineStatus();
+
+
+        // 2. Cross-Tab Synchronization
+        // This ensures that if you open the app in two tabs, they stay in sync
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'focusflow-tasks') {
+                console.log('Data changed in another tab, syncing...');
+                state.tasks = JSON.parse(e.newValue) || [];
+                renderTasks();
+            }
+        });
+
+        // 3. Request Background Sync
+        const requestBackgroundSync = () => {
+            if ('serviceWorker' in navigator && 'SyncManager' in window) {
+                navigator.serviceWorker.ready.then(registration => {
+                    registration.sync.register('sync-tasks')
+                        .then(() => console.log('Background sync registered'))
+                        .catch(err => console.error('Background sync failed:', err));
+                });
+            }
+        };
+
+
+        // --- TIMER LOGIC ---
+        
+        const circleRadius = 45;
+        const circumference = 2 * Math.PI * circleRadius;
+        els.ring.style.strokeDasharray = `${circumference} ${circumference}`;
+        els.ring.style.strokeDashoffset = 0;
+
+        const setProgress = (percent) => {
+            const offset = circumference - (percent / 100) * circumference;
+            els.ring.style.strokeDashoffset = offset;
+        };
+
+        const updateTimerDisplay = () => {
+            els.display.textContent = formatTime(state.timer.timeLeft);
+            const percent = (state.timer.timeLeft / state.timer.duration) * 100;
+            setProgress(percent);
+        };
+
+        const toggleTimer = () => {
+            if (state.timer.isActive) {
+                clearInterval(state.timer.interval);
+                state.timer.isActive = false;
+                els.playIcon.classList.remove('hidden');
+                els.pauseIcon.classList.add('hidden');
+            } else {
+                state.timer.isActive = true;
+                els.playIcon.classList.add('hidden');
+                els.pauseIcon.classList.remove('hidden');
+                state.timer.interval = setInterval(() => {
+                    if (state.timer.timeLeft > 0) {
+                        state.timer.timeLeft--;
+                        updateTimerDisplay();
+                    } else {
+                        // Timer finished
+                        clearInterval(state.timer.interval);
+                        state.timer.isActive = false;
+                        els.playIcon.classList.remove('hidden');
+                        els.pauseIcon.classList.add('hidden');
+                        showToast(state.timer.isFocus ? "Focus session complete!" : "Break over!");
+                        // Play sound logic here if desired
+                    }
+                }, 1000);
+            }
+        };
+
+        const resetTimer = () => {
+            clearInterval(state.timer.interval);
+            state.timer.isActive = false;
+            state.timer.timeLeft = state.timer.duration;
+            els.playIcon.classList.remove('hidden');
+            els.pauseIcon.classList.add('hidden');
+            updateTimerDisplay();
+        };
+
+        const toggleMode = () => {
+            resetTimer();
+            state.timer.isFocus = !state.timer.isFocus;
+            state.timer.duration = state.timer.isFocus ? 25 * 60 : 5 * 60;
+            state.timer.timeLeft = state.timer.duration;
+            els.status.textContent = state.timer.isFocus ? "Focus" : "Short Break";
+            els.status.className = state.timer.isFocus 
+                ? "text-sm text-gray-500 font-medium mt-2 uppercase tracking-widest"
+                : "text-sm text-green-500 font-medium mt-2 uppercase tracking-widest";
+            els.ring.classList.toggle('text-indigo-600');
+            els.ring.classList.toggle('text-green-500');
+            els.toggleBtn.classList.toggle('bg-indigo-600');
+            els.toggleBtn.classList.toggle('bg-green-500');
+            els.toggleBtn.classList.toggle('hover:bg-indigo-700');
+            els.toggleBtn.classList.toggle('hover:bg-green-600');
+            updateTimerDisplay();
+        };
+
+        // --- TASK LOGIC ---
+
+        const saveTasks = () => {
+            localStorage.setItem('focusflow-tasks', JSON.stringify(state.tasks));
+            renderTasks();
+            requestBackgroundSync(); // Trigger background sync on every save
+        };
+
+        const renderTasks = () => {
+            els.taskList.innerHTML = '';
+            if (state.tasks.length === 0) {
+                els.taskList.innerHTML = `
+                    <div class="text-center text-gray-400 mt-10">
+                        <i data-lucide="clipboard-list" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                        <p>No tasks yet. Add one above!</p>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            state.tasks.forEach(task => {
+                const div = document.createElement('div');
+                div.className = `flex items-center gap-3 p-4 bg-white rounded-xl border ${task.completed ? 'border-gray-100 bg-gray-50' : 'border-gray-200 shadow-sm'}`;
+                div.innerHTML = `
+                    <button onclick="toggleTask('${task.id}')" class="shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition ${task.completed ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-indigo-500'}">
+                        ${task.completed ? '<i data-lucide="check" class="w-3 h-3 text-green-600"></i>' : ''}
+                    </button>
+                    <span class="flex-1 text-sm font-medium ${task.completed ? 'line-through text-gray-400' : 'text-gray-800'}">${task.text}</span>
+                    <button onclick="deleteTask('${task.id}')" class="shrink-0 text-gray-400 hover:text-red-500 transition">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                `;
+                els.taskList.appendChild(div);
+            });
+            lucide.createIcons();
+        };
+
+        window.toggleTask = (id) => {
+            const task = state.tasks.find(t => t.id === id);
+            if (task) {
+                task.completed = !task.completed;
+                saveTasks();
+            }
+        };
+
+        window.deleteTask = (id) => {
+            state.tasks = state.tasks.filter(t => t.id !== id);
+            saveTasks();
+        };
+
+        els.taskForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const text = els.taskInput.value.trim();
+            if (!text) return;
+            
+            state.tasks.unshift({
+                id: Date.now().toString(),
+                text,
+                completed: false
+            });
+            els.taskInput.value = '';
+            saveTasks();
+            showToast("Task added");
+        });
+
+        // --- NAVIGATION LOGIC ---
+
+        els.navBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                // Update UI
+                els.navBtns.forEach(b => {
+                    b.classList.remove('text-indigo-600', 'active-nav');
+                    b.classList.add('text-gray-400');
+                });
+                btn.classList.remove('text-gray-400');
+                btn.classList.add('text-indigo-600', 'active-nav');
+
+                // Switch View
+                const targetId = btn.dataset.target;
+                Object.entries(els.views).forEach(([id, el]) => {
+                    if (id === targetId) {
+                        el.classList.remove('opacity-0', 'pointer-events-none', 'translate-x-full', '-translate-x-full');
+                        el.classList.add('translate-x-0', 'z-10');
+                    } else {
+                        el.classList.add('opacity-0', 'pointer-events-none');
+                        el.classList.remove('translate-x-0', 'z-10');
+                        // Slide direction logic could go here, simplified for now
+                        el.classList.add(id === 'view-timer' ? '-translate-x-full' : 'translate-x-full'); 
+                    }
+                });
+            });
+        });
+
+        // Event Listeners for Controls
+        els.toggleBtn.addEventListener('click', toggleTimer);
+        els.resetBtn.addEventListener('click', resetTimer);
+        els.modeBtn.addEventListener('click', toggleMode);
+
+        // Init
+        updateTimerDisplay();
+        renderTasks();
+
+    </script>
+</body>
+</html>
